@@ -74,9 +74,7 @@ def has_var_kw_arg(fn):
 
 def has_request_arg(fn):
     sig = inspect.signature(fn)
-    print("------",sig)
     params = sig.parameters
-    print("------", params)
     found = False
     for name, param in params.items():
         if name == 'request':
@@ -99,8 +97,6 @@ class RequestHandler(object):
         self._required_kw_args = get_required_kw_args(fn)
 
     async def __call__(self, request):
-        print(request)
-        print(request.__dict__)
         kw = None
         if self._has_var_kw_arg or self._has_named_kw_args or self._required_kw_args:
             if request.method == 'POST':
@@ -157,6 +153,10 @@ def add_static(app):
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
     app.router.add_static('/static/', path)
     logging.info('add static %s => %s' % ('/static/', path))
+
+    # path_static_admin = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static_admin')
+    # app.router.add_static('/static_admin/', path_static_admin)
+    # logging.info('add static %s => %s' % ('/static_admin/', path_static_admin))
 
 
 def add_route(app, fn):

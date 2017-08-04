@@ -1,0 +1,91 @@
+{% extends 'admin/base.html' %}
+{% block title%} 编辑博客 {% endblock %}
+{% block content_header %} 编辑博客 {% endblock %}
+
+{% block content %}
+
+<div id="loading">
+    <span><i class="am-icon-spinner am-icon-pulse" style="display:inline-block"></i> 正在加载...</span>
+</div>
+<form id="update-blog" v-on="submit : submit" >
+    <div>
+        <button type="submit" style="margin-left: 5%;"><i class="am-icon-home am-icon-btn am-primary am-icon-save"></i> 保存</button>
+        <a href="/admin" class="uk-button"><i class="am-icon-home am-icon-ban am-icon-btn am-primary" ></i> 取消</a>
+    </div>
+
+    <div>
+        <div class="am-text-center">
+            标题 <input v-model="name" name="name" type="text">
+        </div>
+    </div>
+
+    <div>
+        <div class="am-text-center">
+            描述 <input v-model="summary" name="summary" type="text" >
+        </div>
+    </div>
+
+    <div>
+        <div class="am-text-left">
+            内容 <textarea v-model="content" rows="16" name="content" ></textarea>
+        </div>
+    </div>
+
+
+</form>
+
+{% endblock %}      
+
+{% block script %}
+
+<script>
+    var
+        ID = '{{ id }}',
+        action = '{{ action }}';
+
+    function initVM(blog) {
+        var vm = new Vue({
+            el: '#update-blog',
+            data: blog,
+            methods: {
+                submit: function (event) {
+                    event.preventDefault();
+                    var $form = $('#update-blog');
+                    $form.postJSON(action, this.$data, function (err, r) {
+                        if (err) {
+                            $form.showFormError(err);
+                        }
+                        else {
+                            return location.assign('/admin');
+                            // return location.assign('/api/blogs/' + r.id);
+                        }
+                    });
+                }
+            }
+        });
+        $('#update-blog').show();
+    }
+
+    $(function () {
+        if (ID) {
+            getJSON('/api/blogs/' + ID, function (err, blog) {
+                if (err) {
+                    return fatal(err);
+                }
+                $('#loading').hide();
+                initVM(blog);
+            });
+        }
+        else {
+            $('#loading').hide();
+            initVM({
+                name: '',
+                summary: '',
+                content: ''
+            });
+        }
+    });
+
+
+</script>
+{% endblock %}

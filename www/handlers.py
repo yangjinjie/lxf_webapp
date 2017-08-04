@@ -100,24 +100,118 @@ async def index(request):
     #     'blogs': blogs
     # }
 
+
+    # blog = await Blog.findAll()
+    # return {
+    #     '__template__': 'blogs.html',
+    #     'blogs': blog
+    # }
+
     blog = await Blog.findAll()
+    user = request.__user__
     return {
-        '__template__': 'blogs.html',
-        'blogs': blog
+        '__template__': 'index.html',
+        'blogs': blog,
+        'user' : user,
     }
 
 
+@get('/index-center')
+async def index_center(request):
+    """
+    首页
+    :param request:
+    :return:
+    """
+
+    blog = await Blog.findAll()
+    user = request.__user__
+    return {
+        '__template__': 'index-center.html',
+        'blogs': blog,
+        'user' : user,
+    }
+
+@get('/index-nosidebar')
+async def index_nosidebar(request):
+    """
+    首页
+    :param request:
+    :return:
+    """
+    blog = await Blog.findAll()
+    user = request.__user__
+    return {
+        '__template__': 'index-nosidebar.html',
+        'blogs': blog,
+        'user' : user,
+    }
+
+
+
+@get('/index-noslider')
+async def index_noslider(request):
+    """
+    首页
+    :param request:
+    :return:
+    """
+
+    blog = await Blog.findAll()
+    user = request.__user__
+    return {
+        '__template__': 'index-noslider.html',
+        'blogs': blog,
+        'user' : user,
+    }
+
+@get('/login')
+async def login(request):
+    return {
+        '__template__': 'login.html',
+        'blogs': None
+    }
+
+@post('/login_auth')
+async def login_auth(*, email, passwd):
+
+    if not email:
+        raise APIValueError('email', 'Invalid email.')
+    if not passwd:
+        raise APIValueError('passwd', 'Invalid password.')
+    users = await User.findAll('email=?', [email])
+    if len(users) == 0:
+        raise APIValueError('email', 'Email not exist.')
+    user = users[0]
+    # check passwd:
+    sha1 = hashlib.sha1()
+    sha1.update(user.id.encode('utf-8'))
+    sha1.update(b':')
+    sha1.update(passwd.encode('utf-8'))
+    if user.passwd != sha1.hexdigest():
+        raise APIValueError('passwd', 'Invalid password.')
+    # authenticate ok, set cookie:
+    r = web.Response()
+    r.set_cookie(COOKIE_NAME, user2cookie(user, 86400), max_age=86400, httponly=True)
+    user.passwd = '******'
+    r.content_type = 'application/json'
+    r.body = json.dumps(user, ensure_ascii=False).encode('utf-8')
+    return r
+
+
 @get('/blog/{id}')
-async def get_blog(id):
+async def get_blog(id, request):
+    user = request.__user__
     blog = await Blog.find(id)
     comments = await Comment.findAll('blog_id=?', [id], orderBy='created_at desc')
     for c in comments:
         c.html_content = text2html(c.content)
     blog.html_content = markdown2.markdown(blog.content)
     return {
-        '__template__': 'manage_blog_edit.html',
+        '__template__': 'article-fullwidth.html',
         'blog': blog,
-        'comments': comments
+        'comments': comments,
+        'user': user,
     }
 
 
@@ -173,6 +267,68 @@ _RE_EMAIL = re.compile(r'^[a-z0-9\.\-\_]+\@[a-z0-9\-\_]+(\.[a-z0-9\-\_]+){1,4}$'
 _RE_SHA1 = re.compile(r'^[0-9a-f]{40}$')
 
 
+@get('/admin')
+async def admin(*, page='1', request):
+    blogs = await Blog.findAll()
+    user = request.__user__
+    return {
+        '__template__': 'admin/index.html',
+        'blogs': blogs,
+        'user': user,
+        'page_index': get_page_index(page)
+    }
+
+
+@get('/admin/blogs/create')
+async def create_blog(request):
+    """
+    创建博客
+    :return:
+    """
+    user = request.__user__
+    return {
+        # '__template__': 'admin/editor.html',
+        '__template__': 'admin/simple.html',
+        'user': user,
+        'id': '',
+        'action': '/api/blogs/create_blog'
+
+    }
+
+@get('/admin/blogs/edit/{id}')
+async def edit_blog(id, request):
+    """
+    编辑博客
+    :return:
+    """
+    user = request.__user__
+    return {
+        # '__template__': 'admin/editor.html',
+        '__template__': 'admin/simple.html',
+        'user': user,
+        'id': id,
+        'action': '/api/blogs/%s' % id
+
+    }
+
+
+@post('/admin/blogs/edit/{id}')
+async def edit_blog_update(id, request, *, name, summary, content):
+
+    check_admin(request)
+    blog = await Blog.find(id)
+    if not name or not name.strip():
+        raise APIValueError('name', 'name cannot be empty.')
+    if not summary or not summary.strip():
+        raise APIValueError('summary', 'summary cannot be empty.')
+    if not content or not content.strip():
+        raise APIValueError('content', 'content cannot be empty.')
+    blog.name = name.strip()
+    blog.summary = summary.strip()
+    blog.content = content.strip()
+    await blog.update()
+    return {}
+
 @get('/manage/blogs')
 def manage_blogs(*, page='1'):
     return {
@@ -219,6 +375,7 @@ async def api_register_user(*, email, name, passwd):
 
 @get('/api/users')
 async def api_get_users():
+
     users = await User.findAll(orderBy='created_at desc')
     for u in users:
         u.passwd = '******'
@@ -227,6 +384,11 @@ async def api_get_users():
 
 @get('/api/blogs')
 async def api_blogs(*, page='1'):
+    """
+    获取所有blog
+    :param page:
+    :return:
+    """
     page_index = get_page_index(page)
     num = await Blog.findNumber('count(id)')
     p = Page(num, page_index)
@@ -236,8 +398,17 @@ async def api_blogs(*, page='1'):
     return dict(page=p, blogs=blogs)
 
 
-@post('/api/blogs')
+@post('/api/blogs/create_blog')
 async def api_create_blog(request, *, name, summary, content):
+    """
+    创建blog
+    :param request:
+    :param name:
+    :param summary:
+    :param content:
+    :return:
+    """
+    print('create----------------blog')
     check_admin(request)
     if not name or not name.strip():
         raise APIValueError('name', 'name cannot be empty.')
@@ -252,12 +423,16 @@ async def api_create_blog(request, *, name, summary, content):
 
 @get('/api/blogs/{id}')
 async def api_get_blog(*, id):
+    print('------return blog')
     blog = await Blog.find(id)
     return blog
 
 
 @post('/api/blogs/{id}')
 async def api_update_blog(id, request, *, name, summary, content):
+    """更新Blog"""
+    print("Update ----------- blog", request)
+    print(name, summary, content)
     check_admin(request)
     blog = await Blog.find(id)
     if not name or not name.strip():
@@ -275,6 +450,12 @@ async def api_update_blog(id, request, *, name, summary, content):
 
 @post('/api/blogs/{id}/delete')
 async def api_delete_blog(request, *, id):
+    """
+    删除博客
+    :param request:
+    :param id:
+    :return:
+    """
     check_admin(request)
     blog = await Blog.find(id)
     await blog.remove()

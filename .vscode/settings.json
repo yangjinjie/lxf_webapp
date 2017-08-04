@@ -1,0 +1,5 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+    "python.pythonPath": "/Users/boxfish/.pyenv/versions/lxf_webapp/bin/python",
+    "editor.fontSize": 14,
+}
